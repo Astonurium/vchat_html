@@ -8,58 +8,105 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
       --bg: #0a0d12;
       --accent: #00e5ff;
       --danger: #ff4d6d;
-      --glass: rgba(10, 13, 18, 0.72);
+      --glass: rgba(10,13,18,0.75);
       --border: rgba(255,255,255,0.09);
       --muted: #5a6472;
       --text: #dce3ea;
     }
+    html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: #000; overflow: hidden; color: var(--text); }
 
-    html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: #000; overflow: hidden; }
+    /* ═══════════════════════════════════════
+       PERMISSION GATE — показывается первым
+    ═══════════════════════════════════════ */
+    #gate {
+      position: fixed; inset: 0; z-index: 200;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 28px;
+      background: radial-gradient(ellipse at 40% 30%, #0c1f35 0%, var(--bg) 65%);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #gate.hide { opacity: 0; transform: scale(1.04); pointer-events: none; }
 
-    /* ── REMOTE (full screen) ── */
+    .gate-icon { font-size: 3.2rem; animation: float 3s ease-in-out infinite; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+
+    .gate-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.8rem; font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .gate-title span { color: var(--accent); }
+
+    .gate-sub {
+      font-size: 0.88rem; color: var(--muted);
+      text-align: center; line-height: 1.7;
+      max-width: 320px;
+    }
+
+    .gate-perms {
+      display: flex; gap: 20px;
+    }
+    .perm-chip {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 40px;
+      padding: 8px 16px;
+      font-size: 0.8rem; color: var(--muted);
+    }
+
+    #startBtn {
+      padding: 15px 44px;
+      border-radius: 50px; border: none;
+      background: linear-gradient(135deg, var(--accent), #00b8d4);
+      color: #000; font-size: 1rem; font-weight: 600;
+      font-family: 'DM Sans', sans-serif;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      letter-spacing: 0.02em;
+    }
+    #startBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(0,229,255,0.3);
+    }
+    #startBtn:active { transform: translateY(0); }
+    #startBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    #gateError {
+      font-size: 0.8rem; color: var(--danger);
+      min-height: 20px; text-align: center;
+    }
+
+    /* ═══════════════════════════════════════
+       CALL SCREEN
+    ═══════════════════════════════════════ */
     #remoteVideo {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
       background: #000;
-      opacity: 0;
-      transition: opacity 0.7s ease;
+      opacity: 0; transition: opacity 0.7s ease;
     }
     #remoteVideo.live { opacity: 1; }
 
-    /* ── WAITING BG ── */
     #waiting {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 22px;
+      position: fixed; inset: 0;
+      display: none; /* hidden until gate closes */
+      flex-direction: column; align-items: center; justify-content: center; gap: 22px;
       background: radial-gradient(ellipse at 35% 35%, #0c1f35 0%, var(--bg) 65%);
-      transition: opacity 0.5s ease;
+      transition: opacity 0.5s;
     }
+    #waiting.visible { display: flex; }
     #waiting.gone { opacity: 0; pointer-events: none; }
 
-    .radar {
-      position: relative;
-      width: 110px;
-      height: 110px;
-    }
+    .radar { position: relative; width: 110px; height: 110px; }
     .radar-ring {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      border: 2px solid var(--accent);
-      opacity: 0;
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 2px solid var(--accent); opacity: 0;
       animation: radar-expand 2.4s ease-out infinite;
     }
     .radar-ring:nth-child(2) { animation-delay: 0.8s; }
@@ -69,272 +116,148 @@
       100% { transform: scale(1.8); opacity: 0; }
     }
     .radar-center {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
       font-size: 2.6rem;
     }
-
     #waitStatus {
       font-family: 'Space Mono', monospace;
-      font-size: 0.8rem;
-      letter-spacing: 0.12em;
-      color: var(--muted);
-      text-transform: uppercase;
+      font-size: 0.8rem; letter-spacing: 0.12em;
+      color: var(--muted); text-transform: uppercase;
     }
 
-    /* ── LOCAL PiP ── */
+    /* PiP */
     #pip {
-      position: fixed;
-      bottom: 90px;
-      right: 20px;
-      width: 20vw;
-      min-width: 150px;
-      max-width: 260px;
-      aspect-ratio: 4/3;
-      border-radius: 14px;
-      overflow: hidden;
+      position: fixed; bottom: 90px; right: 20px;
+      width: 20vw; min-width: 150px; max-width: 260px;
+      aspect-ratio: 4/3; border-radius: 14px; overflow: hidden;
       border: 2px solid rgba(255,255,255,0.13);
       box-shadow: 0 6px 32px rgba(0,0,0,0.65);
-      z-index: 20;
-      cursor: grab;
-      background: #111;
+      z-index: 20; cursor: grab; background: #111;
       transition: border-color 0.3s, right 0.3s;
+      display: none; /* hidden until gate closes */
     }
+    #pip.visible { display: block; }
     #pip:hover { border-color: rgba(0,229,255,0.35); }
     #pip:active { cursor: grabbing; }
-    #localVideo {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      display: block;
-      transform: scaleX(-1);
-    }
+    #localVideo { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
     .pip-tag {
-      position: absolute;
-      bottom: 7px; left: 9px;
-      font-size: 0.6rem;
-      font-family: 'Space Mono', monospace;
-      color: rgba(255,255,255,0.55);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      pointer-events: none;
+      position: absolute; bottom: 7px; left: 9px;
+      font-size: 0.6rem; font-family: 'Space Mono', monospace;
+      color: rgba(255,255,255,0.55); letter-spacing: 0.08em;
+      text-transform: uppercase; pointer-events: none;
     }
 
-    /* ── TOP BAR ── */
+    /* Top bar */
     #topBar {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 56px;
-      padding: 0 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      position: fixed; top: 0; left: 0; right: 0; height: 56px;
+      padding: 0 20px; display: none; align-items: center; justify-content: space-between;
       background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
-      z-index: 10;
-      pointer-events: none;
+      z-index: 10; pointer-events: none;
     }
+    #topBar.visible { display: flex; }
     .logo {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.9rem;
-      color: var(--accent);
-      display: flex;
-      align-items: center;
-      gap: 7px;
+      font-family: 'Space Mono', monospace; font-size: 0.9rem;
+      color: var(--accent); display: flex; align-items: center; gap: 7px;
     }
-    .live-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--danger);
-    }
-    .live-dot.on {
-      background: #00e676;
-      animation: blink 2s infinite;
-    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); }
+    .live-dot.on { background: #00e676; animation: blink 2s infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    #timer { font-family: 'Space Mono', monospace; font-size: 0.82rem; color: rgba(255,255,255,0.55); letter-spacing: 0.1em; }
 
-    #timer {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.82rem;
-      color: rgba(255,255,255,0.55);
-      letter-spacing: 0.1em;
-    }
-
-    /* ── BOTTOM CONTROLS ── */
+    /* Controls */
     #controls {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--glass);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      border: 1px solid var(--border);
-      border-radius: 50px;
-      padding: 9px 16px;
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      display: none; align-items: center; gap: 10px;
+      background: var(--glass); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border); border-radius: 50px; padding: 9px 16px;
       z-index: 20;
     }
+    #controls.visible { display: flex; }
 
     .btn {
-      width: 46px; height: 46px;
-      border-radius: 50%;
-      border: none;
+      width: 46px; height: 46px; border-radius: 50%; border: none;
       display: flex; align-items: center; justify-content: center;
-      font-size: 1.15rem;
-      cursor: pointer;
+      font-size: 1.15rem; cursor: pointer;
       transition: background 0.18s, transform 0.15s;
-      background: rgba(255,255,255,0.08);
-      color: var(--text);
+      background: rgba(255,255,255,0.08); color: var(--text);
       position: relative;
     }
     .btn:hover { background: rgba(255,255,255,0.15); transform: scale(1.07); }
     .btn.off { background: rgba(255,77,109,0.22); color: var(--danger); }
-    .btn.end {
-      background: var(--danger);
-      color: #fff;
-      width: 52px; height: 52px;
-      font-size: 1.3rem;
-    }
+    .btn.end { background: var(--danger); color: #fff; width: 52px; height: 52px; font-size: 1.3rem; }
     .btn.end:hover { background: #ff1f47; }
-
     .btn .tip {
-      position: absolute;
-      bottom: calc(100% + 7px);
-      left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.88);
-      color: #fff;
-      font-size: 0.68rem;
-      padding: 3px 9px;
-      border-radius: 6px;
-      white-space: nowrap;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.18s;
+      position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.88); color: #fff; font-size: 0.68rem;
+      padding: 3px 9px; border-radius: 6px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 0.18s;
     }
     .btn:hover .tip { opacity: 1; }
-
     .sep { width: 1px; height: 28px; background: var(--border); }
 
-    /* ── CHAT ── */
+    /* Chat */
     #chatPanel {
-      position: fixed;
-      right: 20px;
-      top: 60px;
-      bottom: 80px;
-      width: 290px;
-      background: var(--glass);
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      display: flex;
-      flex-direction: column;
-      z-index: 20;
-      transform: translateX(320px);
+      position: fixed; right: 20px; top: 60px; bottom: 80px; width: 290px;
+      background: var(--glass); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+      border: 1px solid var(--border); border-radius: 18px;
+      display: flex; flex-direction: column;
+      z-index: 20; transform: translateX(320px);
       transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
     }
     #chatPanel.open { transform: translateX(0); }
-
     .ch-head {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.82rem;
-      font-weight: 600;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      font-size: 0.82rem; font-weight: 600;
       display: flex; align-items: center; justify-content: space-between;
-      color: var(--text);
     }
     .ch-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.95rem; }
     .ch-close:hover { color: var(--text); }
-
     #messages {
       flex: 1; overflow-y: auto; padding: 12px;
       display: flex; flex-direction: column; gap: 6px;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255,255,255,0.08) transparent;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.08) transparent;
     }
-
     .msg-wrap { display: flex; flex-direction: column; }
     .msg-wrap.mine { align-items: flex-end; }
     .msg-wrap.theirs { align-items: flex-start; }
-
     .bubble {
-      max-width: 82%;
-      padding: 7px 11px;
-      border-radius: 13px;
-      font-size: 0.8rem;
-      line-height: 1.45;
-      word-break: break-word;
+      max-width: 82%; padding: 7px 11px; border-radius: 13px;
+      font-size: 0.8rem; line-height: 1.45; word-break: break-word;
     }
     .mine .bubble { background: rgba(0,229,255,0.18); color: #cff8ff; border-bottom-right-radius: 3px; }
-    .theirs .bubble { background: rgba(255,255,255,0.09); color: var(--text); border-bottom-left-radius: 3px; }
-
-    .msg-time {
-      font-size: 0.62rem;
-      color: var(--muted);
-      margin-top: 2px;
-      font-family: 'Space Mono', monospace;
-    }
-
-    .ch-input {
-      padding: 10px;
-      border-top: 1px solid var(--border);
-      display: flex; gap: 7px;
-    }
+    .theirs .bubble { background: rgba(255,255,255,0.09); border-bottom-left-radius: 3px; }
+    .msg-time { font-size: 0.62rem; color: var(--muted); margin-top: 2px; font-family: 'Space Mono', monospace; }
+    .ch-input { padding: 10px; border-top: 1px solid var(--border); display: flex; gap: 7px; }
     #msgInput {
-      flex: 1;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      color: var(--text);
-      padding: 7px 11px;
-      font-size: 0.8rem;
-      font-family: 'DM Sans', sans-serif;
-      outline: none;
+      flex: 1; background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-radius: 9px; color: var(--text); padding: 7px 11px;
+      font-size: 0.8rem; font-family: 'DM Sans', sans-serif; outline: none;
     }
     #msgInput:focus { border-color: rgba(0,229,255,0.3); }
     #msgInput::placeholder { color: var(--muted); }
     .send {
-      width: 34px; height: 34px;
-      border-radius: 9px;
-      background: var(--accent);
-      border: none;
-      color: #000;
-      cursor: pointer;
-      font-size: 0.9rem;
+      width: 34px; height: 34px; border-radius: 9px;
+      background: var(--accent); border: none; color: #000;
+      cursor: pointer; font-size: 0.9rem;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
     }
     .send:hover { background: #33eeff; }
-
     .notif {
-      position: absolute;
-      top: 5px; right: 5px;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      display: none;
+      position: absolute; top: 5px; right: 5px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); display: none;
     }
 
-    /* ── TOAST ── */
+    /* Toast */
     #toast {
-      position: fixed;
-      bottom: 80px; left: 50%;
+      position: fixed; bottom: 80px; left: 50%;
       transform: translateX(-50%) translateY(14px);
-      background: rgba(20,24,30,0.94);
-      border: 1px solid var(--border);
-      backdrop-filter: blur(16px);
-      border-radius: 10px;
-      padding: 8px 18px;
-      font-size: 0.8rem;
-      color: var(--text);
-      opacity: 0;
-      transition: all 0.28s ease;
-      pointer-events: none;
-      z-index: 99;
-      white-space: nowrap;
+      background: rgba(20,24,30,0.94); border: 1px solid var(--border);
+      backdrop-filter: blur(16px); border-radius: 10px;
+      padding: 8px 18px; font-size: 0.8rem;
+      opacity: 0; transition: all 0.28s ease;
+      pointer-events: none; z-index: 99; white-space: nowrap;
     }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -343,18 +266,31 @@
       #chatPanel { width: calc(100% - 40px); }
       .btn { width: 40px; height: 40px; font-size: 1rem; }
       .btn.end { width: 46px; height: 46px; }
+      .gate-perms { flex-direction: column; gap: 10px; }
     }
   </style>
 </head>
 <body>
 
+<!-- ══ PERMISSION GATE ══ -->
+<div id="gate">
+  <div class="gate-icon">📡</div>
+  <div class="gate-title">Video<span>Link</span></div>
+  <p class="gate-sub">Мгновенный P2P-звонок.<br>Для работы нужен доступ к камере и микрофону.</p>
+  <div class="gate-perms">
+    <div class="perm-chip">🎤 Микрофон</div>
+    <div class="perm-chip">📷 Камера</div>
+  </div>
+  <button id="startBtn" onclick="onStart()">Разрешить и войти</button>
+  <div id="gateError"></div>
+</div>
+
+<!-- ══ CALL SCREEN ══ -->
 <video id="remoteVideo" autoplay playsinline></video>
 
 <div id="waiting">
   <div class="radar">
-    <div class="radar-ring"></div>
-    <div class="radar-ring"></div>
-    <div class="radar-ring"></div>
+    <div class="radar-ring"></div><div class="radar-ring"></div><div class="radar-ring"></div>
     <div class="radar-center">📡</div>
   </div>
   <div id="waitStatus">Поиск собеседника...</div>
@@ -366,18 +302,12 @@
 </div>
 
 <div id="topBar">
-  <div class="logo">
-    <div class="live-dot" id="liveDot"></div>
-    VIDEOLINK
-  </div>
+  <div class="logo"><div class="live-dot" id="liveDot"></div>VIDEOLINK</div>
   <div id="timer"></div>
 </div>
 
 <div id="chatPanel">
-  <div class="ch-head">
-    💬 Чат
-    <button class="ch-close" onclick="toggleChat()">✕</button>
-  </div>
+  <div class="ch-head">💬 Чат <button class="ch-close" onclick="toggleChat()">✕</button></div>
   <div id="messages"></div>
   <div class="ch-input">
     <input id="msgInput" placeholder="Сообщение...">
@@ -398,37 +328,52 @@
 <div id="toast"></div>
 
 <script>
-// ── CONFIG ──────────────────────────────────────────────
-// Slot system: first visitor grabs SLOT_A and waits.
-// Second visitor can't grab SLOT_A → becomes SLOT_B → calls SLOT_A.
 const SLOT_A = 'vlink-slot-alpha-001';
 const SLOT_B = 'vlink-slot-beta-001';
 
-// ── STATE ────────────────────────────────────────────────
 let peer, conn, activeCall, localStream;
-let micOn = true, camOn = true, chatVisible = false;
-let timerID = null;
+let micOn = true, camOn = true, chatVisible = false, timerID = null;
 
 const remoteVideo = document.getElementById('remoteVideo');
 const localVideo  = document.getElementById('localVideo');
 
-// ── BOOT ─────────────────────────────────────────────────
-(async function boot() {
-  await startMedia();
-  trySlotA();
-})();
+// ── STEP 1: User clicks "Allow" — this triggers the browser permission dialog ──
+async function onStart() {
+  const btn = document.getElementById('startBtn');
+  const errEl = document.getElementById('gateError');
+  btn.disabled = true;
+  btn.textContent = 'Запрос разрешений...';
+  errEl.textContent = '';
 
-// ── MEDIA ────────────────────────────────────────────────
-async function startMedia() {
   try {
+    // getUserMedia MUST be called from a user gesture — this is why we use the button
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
-  } catch(e) {
-    setStatus('⚠️ Нет доступа к камере');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Разрешить и войти';
+    if (e.name === 'NotAllowedError') {
+      errEl.textContent = '⚠️ Доступ отклонён. Разрешите камеру/микрофон в настройках браузера.';
+    } else if (e.name === 'NotFoundError') {
+      errEl.textContent = '⚠️ Камера или микрофон не найдены.';
+    } else {
+      errEl.textContent = '⚠️ Ошибка: ' + e.message;
+    }
+    return;
   }
+
+  // Hide gate, show call UI
+  document.getElementById('gate').classList.add('hide');
+  document.getElementById('waiting').classList.add('visible');
+  document.getElementById('pip').classList.add('visible');
+  document.getElementById('topBar').classList.add('visible');
+  document.getElementById('controls').classList.add('visible');
+
+  // STEP 2: Now connect
+  trySlotA();
 }
 
-// ── SLOT A (host) ─────────────────────────────────────────
+// ── SLOT SYSTEM ───────────────────────────────────────────
 function trySlotA() {
   setStatus('Подключение...');
   if (peer) { try { peer.destroy(); } catch(e){} }
@@ -437,12 +382,7 @@ function trySlotA() {
 
   peer.on('open', () => {
     setStatus('Ожидание собеседника...');
-
-    peer.on('connection', c => {
-      conn = c;
-      setupData(conn);
-    });
-
+    peer.on('connection', c => { conn = c; setupData(conn); });
     peer.on('call', incoming => {
       incoming.answer(localStream);
       activeCall = incoming;
@@ -452,7 +392,6 @@ function trySlotA() {
 
   peer.on('error', err => {
     if (err.type === 'unavailable-id') {
-      // Slot A taken — become slot B
       peer.destroy();
       beSlotB();
     } else {
@@ -462,7 +401,6 @@ function trySlotA() {
   });
 }
 
-// ── SLOT B (caller) ──────────────────────────────────────
 function beSlotB() {
   setStatus('Нашёл комнату, подключаюсь...');
   if (peer) { try { peer.destroy(); } catch(e){} }
@@ -472,27 +410,24 @@ function beSlotB() {
   peer.on('open', () => {
     conn = peer.connect(SLOT_A, { reliable: true });
     setupData(conn);
-
     conn.on('open', () => {
       activeCall = peer.call(SLOT_A, localStream);
       activeCall.on('stream', s => showRemote(s));
     });
-
     conn.on('error', () => {
-      setStatus('Ошибка соединения, повтор...');
+      setStatus('Ошибка, повтор...');
       setTimeout(() => { try { peer.destroy(); } catch(e){} trySlotA(); }, 2500);
     });
   });
 
   peer.on('error', () => {
-    // Both slots busy (3rd+ person) — wait and retry
     try { peer.destroy(); } catch(e){}
     setStatus('Ожидание свободного места...');
     setTimeout(trySlotA, 2000 + Math.random() * 2000);
   });
 }
 
-// ── DATA CHANNEL ─────────────────────────────────────────
+// ── DATA / STREAM ─────────────────────────────────────────
 function setupData(c) {
   c.on('data', text => {
     addMsg(text, false);
@@ -504,12 +439,10 @@ function setupData(c) {
     document.getElementById('waiting').classList.remove('gone');
     document.getElementById('liveDot').classList.remove('on');
     stopTimer();
-    // Free up slots and wait for next person
     setTimeout(trySlotA, 1000);
   });
 }
 
-// ── SHOW REMOTE ──────────────────────────────────────────
 function showRemote(stream) {
   remoteVideo.srcObject = stream;
   remoteVideo.classList.add('live');
@@ -527,7 +460,6 @@ function toggleMic() {
   b.className = 'btn' + (micOn ? '' : ' off');
   b.innerHTML = (micOn ? '🎤' : '🔇') + '<div class="tip">Микрофон</div>';
 }
-
 function toggleCam() {
   camOn = !camOn;
   localStream?.getVideoTracks().forEach(t => t.enabled = camOn);
@@ -535,7 +467,6 @@ function toggleCam() {
   b.className = 'btn' + (camOn ? '' : ' off');
   b.innerHTML = (camOn ? '📷' : '🚫') + '<div class="tip">Камера</div>';
 }
-
 function endCall() {
   try { activeCall?.close(); } catch(e){}
   try { conn?.close(); } catch(e){}
@@ -544,115 +475,80 @@ function endCall() {
   clearInterval(timerID);
   location.reload();
 }
-
 function toggleFs() {
-  document.fullscreenElement
-    ? document.exitFullscreen()
-    : document.documentElement.requestFullscreen();
+  document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 }
 
 // ── CHAT ─────────────────────────────────────────────────
 function toggleChat() {
   chatVisible = !chatVisible;
   document.getElementById('chatPanel').classList.toggle('open', chatVisible);
-  const pip = document.getElementById('pip');
-  pip.style.right = chatVisible ? '318px' : '20px';
+  document.getElementById('pip').style.right = chatVisible ? '318px' : '20px';
   if (chatVisible) {
     document.getElementById('notif').style.display = 'none';
     setTimeout(() => document.getElementById('msgInput').focus(), 320);
   }
 }
-
 function sendMsg() {
   const inp = document.getElementById('msgInput');
   const t = inp.value.trim();
-  if (!t) return;
-  if (conn?.open) {
-    conn.send(t);
-    addMsg(t, true);
-    inp.value = '';
-  } else {
-    toast('⚠️ Нет соединения');
-  }
+  if (!t || !conn?.open) return;
+  conn.send(t); addMsg(t, true); inp.value = '';
 }
-
 function addMsg(text, mine) {
   const wrap = document.createElement('div');
   wrap.className = 'msg-wrap ' + (mine ? 'mine' : 'theirs');
-  const bub = document.createElement('div');
-  bub.className = 'bubble';
-  bub.textContent = text;
-  const t = document.createElement('div');
-  t.className = 'msg-time';
+  const bub = document.createElement('div'); bub.className = 'bubble'; bub.textContent = text;
+  const t = document.createElement('div'); t.className = 'msg-time';
   t.textContent = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
   wrap.append(bub, t);
   const msgs = document.getElementById('messages');
-  msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  msgs.appendChild(wrap); msgs.scrollTop = msgs.scrollHeight;
 }
-
-document.getElementById('msgInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') sendMsg();
-});
+document.getElementById('msgInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
 
 // ── TIMER ─────────────────────────────────────────────────
 let t0;
 function startTimer() {
   t0 = Date.now();
-  document.getElementById('timer').textContent = '00:00';
   timerID = setInterval(() => {
     const s = Math.floor((Date.now() - t0) / 1000);
     document.getElementById('timer').textContent =
-      String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
+      String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
   }, 1000);
 }
-function stopTimer() {
-  clearInterval(timerID);
-  document.getElementById('timer').textContent = '';
-}
+function stopTimer() { clearInterval(timerID); document.getElementById('timer').textContent = ''; }
 
 // ── STATUS / TOAST ────────────────────────────────────────
-function setStatus(msg) {
-  document.getElementById('waitStatus').textContent = msg;
-}
-
+function setStatus(msg) { document.getElementById('waitStatus').textContent = msg; }
 let toastT;
 function toast(msg) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toastT);
-  toastT = setTimeout(() => el.classList.remove('show'), 3000);
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
 // ── DRAGGABLE PiP ─────────────────────────────────────────
 (function() {
   const el = document.getElementById('pip');
   let drag = false, ox, oy;
-
   el.addEventListener('mousedown', e => {
-    drag = true;
-    const r = el.getBoundingClientRect();
-    ox = e.clientX - r.left; oy = e.clientY - r.top;
-    el.style.transition = 'none';
+    drag = true; const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left; oy = e.clientY - r.top; el.style.transition = 'none';
   });
   document.addEventListener('mousemove', e => {
     if (!drag) return;
-    el.style.left = (e.clientX - ox) + 'px';
-    el.style.top  = (e.clientY - oy) + 'px';
+    el.style.left = (e.clientX - ox) + 'px'; el.style.top = (e.clientY - oy) + 'px';
     el.style.right = 'auto'; el.style.bottom = 'auto';
   });
   document.addEventListener('mouseup', () => { drag = false; el.style.transition = ''; });
-
   el.addEventListener('touchstart', e => {
     const t = e.touches[0], r = el.getBoundingClientRect();
     drag = true; ox = t.clientX - r.left; oy = t.clientY - r.top;
   }, { passive: true });
   document.addEventListener('touchmove', e => {
-    if (!drag) return;
-    const t = e.touches[0];
-    el.style.left = (t.clientX - ox) + 'px';
-    el.style.top  = (t.clientY - oy) + 'px';
+    if (!drag) return; const t = e.touches[0];
+    el.style.left = (t.clientX - ox) + 'px'; el.style.top = (t.clientY - oy) + 'px';
     el.style.right = 'auto'; el.style.bottom = 'auto';
   }, { passive: true });
   document.addEventListener('touchend', () => drag = false);
