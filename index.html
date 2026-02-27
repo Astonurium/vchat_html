@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Видеозвонок 1-на-1 (GitHub Pages)</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    body {font-family:Arial;background:#111;color:#0f0;text-align:center;margin:0;padding:20px;}
+    video {width:48%;margin:10px;border:3px solid #0f0;border-radius:12px;}
+    #status {font-size:1.8em;margin:20px;}
+    #chat {max-width:500px;margin:20px auto;background:#222;padding:15px;border-radius:10px;}
+    input {width:75%;padding:10px;}
+    button {padding:10px 20px;background:#0f0;color:#000;border:none;cursor:pointer;margin:5px;}
+    #shareLink {background:#333;padding:15px;border-radius:10px;word-break:break-all;}
+  </style>
+</head>
+<body>
+  <h1>🎥 Видеозвонок для 2 абонентов (GitHub Pages)</h1>
+  <div id="status">Выберите действие</div>
+
+  <div id="controls">
+    <button onclick="createRoom()">Я Abonent 1 — создать комнату</button>
+    <button onclick="showJoinForm()">Я Abonent 2 — присоединиться</button>
+  </div>
+
+  <div id="joinForm" style="display:none;">
+    <input id="peerIdInput" placeholder="Вставьте ID комнаты от Abonent 1">
+    <button onclick="joinRoom()">Присоединиться</button>
+  </div>
+
+  <div id="shareLink" style="display:none;"></div>
+
+  <video id="local" autoplay muted playsinline></video>
+  <video id="remote" autoplay playsinline></video>
+
+  <div id="chat" style="display:none;">
+    <div id="messages" style="height:200px;overflow-y:scroll;margin-bottom:10px;"></div>
+    <input id="msg" placeholder="Сообщение...">
+    <button onclick="sendChat()">Отправить</button>
+  </div>
+
+  <script>
+    let peer, conn, localStream, myRole;
+    const localVideo = document.getElementById('local');
+    const remoteVideo = document.getElementById('remote');
+    const statusEl = document.getElementById('status');
+
+    async function startMedia() {
+      localStream = await navigator.mediaDevices.getUserMedia({video: true, audio: true});
+      localVideo.srcObject = localStream;
+    }
+
+    function createRoom() {
+      myRole = 1;
+      peer = new Peer(); // автоматически генерирует ID
+      peer.on('open', id => {
+        statusEl.innerHTML = `Вы — <b>Abonent 1</b><br>Поделитесь ссылкой с партнёром:`;
+        const link = `${location.origin}${location.pathname}?join=${id}`;
+        document.getElementById('shareLink').innerHTML = `🔗 <a href="${link}" target="_blank">${link}</a><br>(откройте в другом браузере)`;
+        document.getElementById('shareLink').style.display = 'block';
+        document.getElementById('controls').style.display = 'none';
+        startMedia();
+      });
+
+      peer.on('connection', setupConnection);
+      peer.on('call', handleIncomingCall);
+    }
+
+    function showJoinForm() {
+      document.getElementById('controls').style.display = 'none';
+      document.getElementById('joinForm').style.display = 'block';
+    }
+
+    function joinRoom() {
+      const targetId = document.getElementById('peerIdInput').value.trim();
+      if (!targetId) return alert('Введите ID комнаты');
+      myRole = 2;
+      peer = new Peer();
+      peer.on('open', () => {
+        conn = peer.connect(targetId);
+        setupConnection(conn);
+        statusEl.textContent = 'Подключение к Abonent 1...';
+        startMedia();
+      });
+      peer.on('call', handleIncomingCall);
+    }
+
+    function setupConnection(c) {
+      conn = c;
+      conn.on('open', () => {
+        statusEl.textContent = 'Соединение установлено! Начинаем звонок...';
+        document.getElementById('chat').style.display = 'block';
+        if (myRole === 1) startCall();
+      });
+
+      conn.on('data', text => {
+        const div = document.createElement('div');
+        div.innerHTML = `<b>Abonent ${3-myRole}:</b> ${text}`;
+        document.getElementById('messages').appendChild(div);
+        document.getElementById('messages').scrollTop = 9999;
+      });
+    }
+
+    async function startCall() {
+      const call = peer.call(peer.id, localStream); // для Abonent 1
+      call.on('stream', stream => remoteVideo.srcObject = stream);
+    }
+
+    function handleIncomingCall(call) {
+      call.answer(localStream);
+      call.on('stream', stream => remoteVideo.srcObject = stream);
+    }
+
+    function sendChat() {
+      const input = document.getElementById('msg');
+      if (conn && input.value) {
+        conn.send(input.value);
+        const div = document.createElement('div');
+        div.innerHTML = `<b>Я:</b> ${input.value}`;
+        document.getElementById('messages').appendChild(div);
+        document.getElementById('messages').scrollTop = 9999;
+        input.value = '';
+      }
+    }
+
+    // Enter в чате
+    document.getElementById('msg').addEventListener('keypress', e => {
+      if (e.key === 'Enter') sendChat();
+    });
+  </script>
+</body>
+</html>
